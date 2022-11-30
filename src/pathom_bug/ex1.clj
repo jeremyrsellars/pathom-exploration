@@ -16,20 +16,6 @@
   [{:language/id 1, :language/code "en"}
    {:language/id 2, :language/code "es"}])
 
-(def mock-resource-db
-  (into []
-        (for [rid (range 100)
-              {:keys [language/id language/code] :as l} mock-languages-db]
-          (assoc l
-                 :language/id id
-                 :language/code (keyword "language" (name code))
-                 :lang-resource/rid rid
-                 :lang-resource/rid-code (str (name code) "-" rid)
-                 :lang-resource/value (str (name code) ":" rid)))))
-
-(def mock-parents-db
-  [{:parent/id 1, :parent/title-rid 1}])
-
 (pco/defresolver languages
   "Fetches all languages"
   [_ _]
@@ -45,6 +31,19 @@
   (let [ids (map :language/id items)]
     (->> ids
          (mapv #(some (fn [{:keys [:language/id]}] (when (= id %) %)) mock-languages-db)))))
+
+(def mock-resource-db
+  [{:language/id 1, :language/code :language/en, :lang-resource/rid 1, :lang-resource/rid-code "en-1", :lang-resource/value "en:1"}
+   {:language/id 2, :language/code :language/es, :lang-resource/rid 1, :lang-resource/rid-code "es-1", :lang-resource/value "es:1"}
+   {:language/id 1, :language/code :language/en, :lang-resource/rid 2, :lang-resource/rid-code "en-2", :lang-resource/value "en:2"}
+   {:language/id 2, :language/code :language/es, :lang-resource/rid 2, :lang-resource/rid-code "es-2", :lang-resource/value "es:2"}
+   {:language/id 1, :language/code :language/en, :lang-resource/rid 3, :lang-resource/rid-code "en-3", :lang-resource/value "en:3"}
+   {:language/id 2, :language/code :language/es, :lang-resource/rid 3, :lang-resource/rid-code "es-3", :lang-resource/value "es:3"}
+   {:language/id 1, :language/code :language/en, :lang-resource/rid 4, :lang-resource/rid-code "en-4", :lang-resource/value "en:4"}
+   {:language/id 2, :language/code :language/es, :lang-resource/rid 4, :lang-resource/rid-code "es-4", :lang-resource/value "es:4"}])
+
+(def mock-parents-db
+  [{:parent/id 1, :parent/title-rid 1}])
 
 (pco/defresolver parent-title-resource
   [_env input]
