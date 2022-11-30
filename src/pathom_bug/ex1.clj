@@ -96,12 +96,22 @@
   {::pco/output [{:child-parents parent-attributes}]}
   {:child-parents (vec mock-parents-db)})
 
-(pco/defresolver parents-by-ids
+(pco/defresolver parents-by-ids-batched
   "Fetches specific child parents by parent/id"
   [_env items]
   {::pco/input  [:parent/id]
    ::pco/output [{:parent parent-attributes}]
    ::pco/batch? true}
+  (->> (map :parent/id items)
+       mock-parents-db
+       (coll/restore-order items :parent/id)
+       (hash-map :parent)))
+
+(pco/defresolver parents-by-ids-one
+  "Fetches specific child parents by parent/id"
+  [_env items]
+  {::pco/input  [:parent/id]
+   ::pco/output [{:parent parent-attributes}]}
   (->> (map :parent/id items)
        mock-parents-db
        (coll/restore-order items :parent/id)
@@ -114,7 +124,23 @@
    :parent/id
    :child/title-rid])
 
-(pco/defresolver children-in-parents
+(pco/defresolver children-in-parents-batched
+  "Fetches children in child parents specified by parent/id"
+  [_env parents]
+  {::pco/input  [:parent/id]
+   ::pco/output [{:parent/children child-attributes}]
+   ::pco/batch? true}
+  (let [parent-ids (map :parent/id parents)]
+    (mapv (fn [id] {:parent/children
+                    [{:child/id (+ 100 id)
+                      :parent/id id
+                      :child/title-rid 1}
+                     {:child/id (+ 101 id)
+                      :parent/id id
+                      :child/title-rid 3}]})
+          parent-ids)))
+
+(pco/defresolver children-in-parents-one
   "Fetches children in child parents specified by parent/id"
   [_env parents]
   {::pco/input  [:parent/id]
@@ -132,14 +158,14 @@
 
 
 (def resolvers
-  [parent-title-resource
-   child-title-resource
-   (if true resource-value-batched resource-value-one)
-   resource-values
-   parents
-   parents-by-ids
-   children-in-parents
-   #_|])
+  (let [batched? false]
+    [parent-title-resource
+     child-title-resource
+     (if batched? resource-value-batched resource-value-one)
+     resource-values
+     parents
+     (if batched? children-in-parents-batched children-in-parents-one)
+     #_|]))
 
 (def env
   (cond-> (merge {:db/sql {} #_sql/sql} (pci/register resolvers))
