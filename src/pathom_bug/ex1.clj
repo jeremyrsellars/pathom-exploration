@@ -4,7 +4,10 @@
             [clojure.string :as string]
             [com.wsscode.misc.coll :as coll]
             [com.wsscode.pathom3.connect.operation :as pco]
-            [com.wsscode.pathom.viz.ws-connector.pathom3 :as p.connector]))
+            [com.wsscode.pathom3.connect.indexes :as pci]
+            [com.wsscode.pathom3.interface.eql :as p.eql]
+            [com.wsscode.pathom.viz.ws-connector.pathom3 :as p.connector]
+            [com.wsscode.pathom.viz.ws-connector.core :as pvc]))
 
 (def language-attributes
   [:language/id
@@ -66,7 +69,6 @@
                     ::pco/output  [{resource-attr-kw [:lang-resource/rid]}]
                     ::pco/resolve (fn resource-id-resolver
                                     [_env input]
-                                    (prn ::resource-seed-resolver resource-id-attr-kw resource-attr-kw #_input)
                                     {resource-attr-kw
                                      {:lang-resource/rid (resource-id-attr-kw input)}})}))))
 
@@ -80,11 +82,9 @@
   {::pco/input  [:lang-resource/rid]
    ::pco/output [{:lang-resource/resources [:lang-resource/rid-code :language/code]}]}
   (let [lang-codes (or (some->> env pco/params :language/codes)
-                       (prn "Warning: fetching languages for resource-values")
                        (map (fn [{:keys [language/code]}]
                               (keyword "language" (name code)))
                             data-languages))]
-    ;; (prn 'resource-values lang-codes 'for-rid rid #_#_:env env :params (pco/params env))
     {:lang-resource/resources
      (mapv #(hash-map :lang-resource/rid-code (str (name %) "-" rid), :language/code %)
            lang-codes)}))
@@ -121,27 +121,13 @@
 
 (def category-attributes
   [:course-category/id
-  ;;  :course-category/key
    :course-category/title-rid])
-  ;;  :course-category/order
-  ;;  :course-category/short-description-rid
-  ;;  :course-category/beta?
-  ;;  :course-category/new?
-  ;;  :course-category/thumb-src
-  ;;  :course-category/title-screen-src
-  ;;  :course-category/overlay-rid
-  ;;  :course-category/long-description-rid])
 
 (pco/defresolver categories
   "Fetches all course categories"
   [_env _]
   {::pco/output [{:course-categories category-attributes}]}
-  ;(prn :categories (store/get-categories sql))
-  {:course-categories (vec data-categories)}) ;(store/get-categories sql))})
-
-(comment
-  ((:resolve categories) {:db/sql sql/sql} nil)
-  |)
+  {:course-categories (vec data-categories)})
 
 (pco/defresolver categories-by-ids
   "Fetches specific course categories by course-category/id"
@@ -154,10 +140,6 @@
        (coll/restore-order items :course-category/id)
        (hash-map :course-category)))
 
-(comment
-  ((:resolve categories-by-ids) {:db/sql sql/sql} [{:course-category/id 2} {:course-category/id 1}])
-  |)
-
 ;; Courses
 
 (def course-attributes
@@ -165,14 +147,6 @@
    :course/key
    :course-category/id
    :course/title-rid])
-  ;;  :course/short-description-rid
-  ;;  :course/long-description-rid
-  ;;  :course/overlay-rid
-  ;;  :course/play-time-rid
-  ;;  :course/order
-  ;;  :course/beta?
-  ;;  :course/new?
-  ;;  :course/image])
 
 (def activity-attributes
   (empty
@@ -258,125 +232,6 @@
                       :course/title-rid 3}]})
           category-ids)))
 
-(pco/defresolver course-activities
-  "Fetches all activities"
-  [_env _]
-  {::pco/output [{:course-catalog/activities activity-attributes}]}
-  {:course-catalog/activities []});(store/get-activities sql)})
-
-;; (pco/defresolver course-activities-by-ids
-;;   "Fetches activities by course-activity/id"
-;;   [_env course-activities]
-;;   {::pco/input  [:course-activity/id]
-;;    ::pco/output activity-attributes
-;;    ::pco/batch? true}
-;;   (let [activity-ids (map :course-activity/id course-activities)]
-;;     (->> (store/get-activities sql activity-ids)
-;;          (coll/restore-order2 activity-ids :course-activity/id))))
-
-(pco/defresolver course-activities-in-courses
-  "Fetches activities in courses specified by course/id"
-  [_env courses]
-  {::pco/input  [:course/id]
-   ::pco/output [{:course/activities activity-attributes}]
-   ::pco/batch? true}
-  (let [course-ids (map :course/id courses)]
-        ;; grouped
-        ;; (->> course-ids
-        ;;      (store/get-activities-in-courses sql)
-        ;;      (group-by :course/id))]
-    (mapv (fn [id] {:course/activities [] #_(grouped id)})
-          course-ids)))
-
-(pco/defresolver course-library-resources
-  "Fetches all resources"
-  [_env _]
-  {::pco/output [{:course-catalog/resources category-resource-attributes}]}
-  {:course-catalog/resources []});(store/get-library-resources sql)})
-
-;; (pco/defresolver course-library-resources-by-ids
-;;   "Fetches resources by category-resource/id"
-;;   [_env course-library-resources]
-;;   {::pco/input  [:category-resource/id]
-;;    ::pco/output category-resource-attributes
-;;    ::pco/batch? true}
-;;   (let [resource-ids (map :category-resource/id course-library-resources)]
-;;     (->> (store/get-library-resources sql resource-ids)
-;;          (coll/restore-order2 resource-ids :category-resource/id))))
-
-(pco/defresolver course-library-resources-in-categories
-  "Fetches resources in courses specified by :course-category/id"
-  [_env categories]
-  {::pco/input  [:course-category/id]
-   ::pco/output [{:course-category/resources category-resource-attributes}]
-   ::pco/batch? true}
-  (let [category-ids (map :course-category/id categories)]
-        ;; grouped
-        ;; (->> category-ids
-        ;;      (store/get-library-resources-in-categories sql)
-        ;;      (group-by :course-category/id))]
-    (mapv (fn [id] {:course-category/resources []});(grouped id)})
-          category-ids)))
-
-;; (pco/defresolver category-attachment-sections
-;;   "Fetches all attachment-sections"
-;;   [_env _]
-;;   {::pco/output [{:course-catalog/attachment-sections attachment-section-attributes}]}
-;;   {:course-catalog/attachment-sections (store/get-attachment-sections sql)})
-
-;; (pco/defresolver category-attachment-sections-by-ids
-;;   "Fetches attachment-sections by category-attachment-section/id"
-;;   [_env category-attachment-sections]
-;;   {::pco/input  [:category-attachment-section/id]
-;;    ::pco/output attachment-section-attributes
-;;    ::pco/batch? true}
-;;   (let [attachment-section-ids (map :category-attachment-section/id category-attachment-sections)]
-;;     (->> (store/get-attachment-sections sql attachment-section-ids)
-;;          (coll/restore-order2 attachment-section-ids :category-attachment-section/id))))
-
-;; (pco/defresolver category-attachment-sections-in-categories
-;;   "Fetches attachment-sections in categories specified by course/id"
-;;   [_env categories]
-;;   {::pco/input  [:course-category/id]
-;;    ::pco/output [{:course-category/attachment-sections attachment-section-attributes}]
-;;    ::pco/batch? true}
-;;   (let [category-ids (map :course-category/id categories)
-;;         grouped
-;;         (->> category-ids
-;;              (store/get-attachment-sections-in-categories sql)
-;;              (group-by :course-category/id))]
-;;     (map (fn [id] {:course-category/attachment-sections (grouped id)})
-;;          category-ids)))
-
-;; (pco/defresolver category-attachments
-;;   "Fetches all attachments"
-;;   [_env _]
-;;   {::pco/output [{:course-catalog/attachments attachment-attributes}]}
-;;   {:course-catalog/attachments (store/get-attachments sql)})
-
-;; (pco/defresolver category-attachments-by-ids
-;;   "Fetches attachments by category-attachment/id"
-;;   [_env category-attachments]
-;;   {::pco/input  [:category-attachment/id]
-;;    ::pco/output attachment-attributes
-;;    ::pco/batch? true}
-;;   (let [attachment-ids (map :category-attachment/id category-attachments)]
-;;     (->> (store/get-attachments sql attachment-ids)
-;;          (coll/restore-order2 attachment-ids :category-attachment/id))))
-
-;; (pco/defresolver category-attachments-in-sections
-;;   "Fetches attachments in category-attachment-sections specified by category-attachment-section/id"
-;;   [_env category-attachment-sections]
-;;   {::pco/input  [:category-attachment-section/id]
-;;    ::pco/output [{:category-attachment-section/attachments attachment-attributes}]
-;;    ::pco/batch? true}
-;;   (let [course-ids (map :category-attachment-section/id category-attachment-sections)
-;;         grouped
-;;         (->> course-ids
-;;              (store/get-attachments-in-sections sql)
-;;              (group-by :category-attachment-section/id))]
-;;     (map (fn [id] {:category-attachment-section/attachments (grouped id)})
-;;          course-ids)))
 
 (def rid-kws
   (->> (concat language-attributes
@@ -386,41 +241,18 @@
                category-resource-attributes
                attachment-section-attributes
                attachment-attributes)
-       (remove #{});:course-category/title-rid})
-      ;;            :course/title-rid})
        (into []
              (filter #(string/ends-with? (.-sym %) "-rid")))))
 
-;; [(resource-seed-resolver :course-category/title-rid)
-;;  course-category__title-resource_defresolver]
-
 (def resolvers
   (-> (mapv resource-seed-resolver rid-kws)
-      ;; (conj course__title-resource_defresolver
-      ;;       course-category__title-resource_defresolver)
-      ;(into (map resource-value-resolver [:language/en :language/es]))
-      ;[]
       (conj languages
             languages-by-ids
             (if true resource-value-batched resource-value-one)
             resource-values
             categories
             categories-by-ids
-            ;; courses
-            ;; courses-by-ids
             courses-in-categories
-            ;; course-activities
-            ;; course-activities-by-ids
-            ;; course-activities-in-courses
-            ;; course-library-resources
-            ;; course-library-resources-by-ids
-            ;; course-library-resources-in-categories
-            ;; category-attachment-sections
-            ;; category-attachment-sections-by-ids
-            ;; category-attachment-sections-in-categories
-            ;; category-attachments
-            ;; category-attachments-by-ids
-            ;; category-attachments-in-sections
             #_|)))
 
 (require '[com.wsscode.pathom3.connect.indexes :as pci] '[com.wsscode.pathom3.interface.eql :as p.eql] #_'[banzai.pathom.interface :as p])
@@ -721,16 +553,25 @@
        {:course/title-resource [:lang-resource/rid {:lang-resource/resources [:language/code :lang-resource/value]}]}
        #_|]}]}])
 
-(defn run [_opts]
+(defn run-example
+  []
   (println "query")
   (println "---------------")
+  (println)
+  (println "```edn")
   (clojure.pprint/pprint query)
+  (println "```")
   (println "result")
   (println "---------------")
+  (println "```edn")
   (clojure.pprint/pprint (p.eql/process env query))
+  (println "```"))
+
+(defn run [_opts]
+  (run-example)
   (System/exit 0))
 
 
-;; (defn -main []
-;;   (run {}))
-;; (-main)
+(defn -main []
+  (run-example))
+(-main)
