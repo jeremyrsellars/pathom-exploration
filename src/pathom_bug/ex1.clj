@@ -148,72 +148,6 @@
    :course-category/id
    :course/title-rid])
 
-(def activity-attributes
-  (empty
-   [:course/id
-    :course-activity/id
-    :course-activity/story-name
-    :course-activity/type
-    :course-activity/order
-    :course-activity/title-rid
-    :course-activity/short-title-rid
-    :course-activity/description-rid
-    :course-activity/image
-    :course-activity/new?
-    :course-activity/beta?]))
-
-(def category-resource-attributes
-  (empty
-   [:course/id
-    :category-resource/key
-    :category-resource/type
-    :category-resource/order
-    :language/id
-    :category-resource/title-rid
-    :category-resource/description-rid
-    :category-resource/cover-image-src]))
-
-(def attachment-section-attributes
-  (empty
-   [:course-category/id
-    :category-attachment-section/id
-    :category-attachment-section/title-rid
-    :category-attachment-section/order]))
-
-(def attachment-attributes
-  (empty
-   [:category-attachment-section/id
-    :category-attachment/id
-    :category-attachment/title-rid
-    :category-attachment/description-rid
-    :category-attachment/link-rid
-    :category-attachment/cover-image-src
-    :category-attachment/order]))
-
-;; (pco/defresolver courses
-;;   "Fetches all courses"
-;;   [_env _]
-;;   {::pco/output course-attributes}
-;;   (store/get-courses sql))
-
-;; (comment
-;;   ((:resolve courses) {:db/sql sql/sql} nil)
-;;   |)
-
-;; (pco/defresolver courses-by-ids
-;;   "Fetches specific courses by course/id"
-;;   [_env items]
-;;   {::pco/input  [:course/id]
-;;    ::pco/output course-attributes
-;;    ::pco/batch? true}
-;;   (->> (map :course/id items)
-;;        (store/get-courses sql)
-;;        (coll/restore-order items :course/id)))
-
-;; (comment
-;;   ((:resolve courses-by-ids) {:db/sql sql/sql} [{:course/id 2}{:course/id 1}])
-;;   |)
-
 (pco/defresolver courses-in-categories
   "Fetches courses in course categories specified by course-category/id"
   [_env categories]
@@ -236,11 +170,7 @@
 (def rid-kws
   (->> (concat language-attributes
                category-attributes
-               course-attributes
-               activity-attributes
-               category-resource-attributes
-               attachment-section-attributes
-               attachment-attributes)
+               course-attributes)
        (into []
              (filter #(string/ends-with? (.-sym %) "-rid")))))
 
@@ -255,8 +185,6 @@
             courses-in-categories
             #_|)))
 
-(require '[com.wsscode.pathom3.connect.indexes :as pci] '[com.wsscode.pathom3.interface.eql :as p.eql] #_'[banzai.pathom.interface :as p])
-(require '[com.wsscode.pathom.viz.ws-connector.core :as pvc] '[com.wsscode.pathom.viz.ws-connector.pathom3 :as p.connector])
 (def env
   (cond-> (merge {:db/sql {} #_sql/sql} (pci/register resolvers))
     :connect-parser
