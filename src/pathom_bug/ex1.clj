@@ -124,6 +124,16 @@
    :parent/id
    :child/title-rid])
 
+(defn lookup-children-by-parent-id
+  [id]
+  {:parent/children
+   [{:child/id (+ 100 id)
+     :parent/id id
+     :child/title-rid 1}
+    {:child/id (+ 101 id)
+     :parent/id id
+     :child/title-rid 3}]})
+
 (pco/defresolver children-in-parents-batched
   "Fetches children in child parents specified by parent/id"
   [_env parents]
@@ -131,40 +141,26 @@
    ::pco/output [{:parent/children child-attributes}]
    ::pco/batch? true}
   (let [parent-ids (map :parent/id parents)]
-    (mapv (fn [id] {:parent/children
-                    [{:child/id (+ 100 id)
-                      :parent/id id
-                      :child/title-rid 1}
-                     {:child/id (+ 101 id)
-                      :parent/id id
-                      :child/title-rid 3}]})
+    (mapv lookup-children-by-parent-id
           parent-ids)))
 
 (pco/defresolver children-in-parents-one
   "Fetches children in child parents specified by parent/id"
-  [_env parents]
+  [_env {:keys [parent/id]}]
   {::pco/input  [:parent/id]
-   ::pco/output [{:parent/children child-attributes}]
-   ::pco/batch? true}
-  (let [parent-ids (map :parent/id parents)]
-    (mapv (fn [id] {:parent/children
-                    [{:child/id (+ 100 id)
-                      :parent/id id
-                      :child/title-rid 1}
-                     {:child/id (+ 101 id)
-                      :parent/id id
-                      :child/title-rid 3}]})
-          parent-ids)))
-
+   ::pco/output [{:parent/children child-attributes}]}
+  (lookup-children-by-parent-id id))
 
 (def resolvers
-  (let [batched? false]
+  (let [show-batch-bug? true]
     [parent-title-resource
      child-title-resource
-     (if batched? resource-value-batched resource-value-one)
+     (if true resource-value-batched resource-value-one)
      resource-values
      parents
-     (if batched? children-in-parents-batched children-in-parents-one)
+     (if show-batch-bug?
+       children-in-parents-batched
+       children-in-parents-one)
      #_|]))
 
 (def env
