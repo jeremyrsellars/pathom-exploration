@@ -1,7 +1,6 @@
 (ns pathom-bug.ex1
   "Resolvers to fetch child catalog information from the database."
   (:require clojure.pprint
-            [clojure.string :as string]
             [com.wsscode.misc.coll :as coll]
             [com.wsscode.pathom3.connect.operation :as pco]
             [com.wsscode.pathom3.connect.indexes :as pci]
@@ -47,30 +46,19 @@
     (->> ids
          (mapv #(some (fn [{:keys [:language/id]}] (when (= id %) %)) mock-languages-db)))))
 
-(defn resource-seed-resolver
-  "Creates a resolver for the specified resource id attribute
-   that resolves to a map containing :lang-resource/rid
-   (a seed of the resource onto which languages can be queried)
-   without assigning to a var."
-  ([resource-id-attr-kw]
-   (resource-seed-resolver resource-id-attr-kw
-                           (-> resource-id-attr-kw
-                               (.-sym)
-                               (string/replace #"[-_]rid$" "-resource")
-                               keyword)))
-  ([resource-id-attr-kw resource-attr-kw]
-   (let [sym (symbol (str (ns-name *ns*))
-                     (-> resource-attr-kw
-                         (.-sym) ; remove keyword colon
-                         str
-                         (string/replace #"(?i)[^-_A-Z0-9]" "__")))]
-     (pco/resolver {::pco/op-name sym
-                    ::pco/input   [resource-id-attr-kw]
-                    ::pco/output  [{resource-attr-kw [:lang-resource/rid]}]
-                    ::pco/resolve (fn resource-id-resolver
-                                    [_env input]
-                                    {resource-attr-kw
-                                     {:lang-resource/rid (resource-id-attr-kw input)}})}))))
+(pco/defresolver parent-title-resource
+  [_env input]
+  {::pco/input   [:parent/title-rid]
+   ::pco/output  [{:parent/title-resource [:lang-resource/rid]}]}
+  {:parent/title-resource
+   {:lang-resource/rid (:parent/title-rid input)}})
+
+(pco/defresolver child-title-resource
+  [_env input]
+  {::pco/input   [:child/title-rid]
+   ::pco/output  [{:child/title-resource [:lang-resource/rid]}]}
+  {:child/title-resource
+   {:lang-resource/rid (:child/title-rid input)}})
 
 (pco/defresolver resource-values
   "Expands from a resource id to a list of language-specific resources based on a known set of languages.
@@ -144,7 +132,6 @@
 
 (def child-attributes
   [:child/id
-   :child/key
    :parent/id
    :child/title-rid])
 
@@ -157,33 +144,25 @@
   (let [parent-ids (map :parent/id parents)]
     (mapv (fn [id] {:parent/children
                     [{:child/id (+ 100 id)
-                      :child/key (keyword (str "child-" (+ 100 id)))
                       :parent/id id
                       :child/title-rid 1}
                      {:child/id (+ 101 id)
-                      :child/key (keyword (str "child-" (+ 101 id)))
                       :parent/id id
                       :child/title-rid 3}]})
           parent-ids)))
 
 
-(def rid-kws
-  (->> (concat language-attributes
-               parent-attributes
-               child-attributes)
-       (into []
-             (filter #(string/ends-with? (.-sym %) "-rid")))))
-
 (def resolvers
-  (-> (mapv resource-seed-resolver rid-kws)
-      (conj languages
-            languages-by-ids
-            (if true resource-value-batched resource-value-one)
-            resource-values
-            parents
-            parents-by-ids
-            children-in-parents
-            #_|)))
+  [parent-title-resource
+   child-title-resource
+   languages
+   languages-by-ids
+   (if true resource-value-batched resource-value-one)
+   resource-values
+   parents
+   parents-by-ids
+   children-in-parents
+   #_|])
 
 (def env
   (cond-> (merge {:db/sql {} #_sql/sql} (pci/register resolvers))
@@ -196,7 +175,6 @@
      {:parent/title-resource [:lang-resource/rid {:lang-resource/resources [:language/code :lang-resource/value]}]}
      {:parent/children
       [:child/id
-       :child/key
        :child/title-rid
        {:child/title-resource [:lang-resource/rid {:lang-resource/resources [:language/code :lang-resource/value]}]}
        #_|]}]}])
@@ -215,6 +193,15 @@
   (clojure.pprint/pprint (p.eql/process env edn-query))
   (println "```"))
 
-(defn run [_opts]
+(defn run
+  "clj -X pathom-bug.ex1/run"
+  [_opts]
   (doc-example query)
   (System/exit 0))
+
+(comment
+  (doc-example query)
+  #_|)
+
+(defn -main []
+  (doc-example query))
