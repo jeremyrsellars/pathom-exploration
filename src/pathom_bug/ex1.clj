@@ -8,29 +8,9 @@
             [com.wsscode.pathom.viz.ws-connector.pathom3 :as p.connector]
             [com.wsscode.pathom.viz.ws-connector.core :as pvc]))
 
-(def language-attributes
-  [:language/id
-   :language/code])
-
 (def mock-languages-db
   [{:language/id 1, :language/code "en"}
    {:language/id 2, :language/code "es"}])
-
-(pco/defresolver languages
-  "Fetches all languages"
-  [_ _]
-  {::pco/output [{:languages language-attributes}]}
-  {:languages mock-languages-db})
-
-(pco/defresolver languages-by-ids
-  "Fetches specific child languages by parent/id"
-  [_env items]
-  {::pco/input  [:language/id]
-   ::pco/output language-attributes
-   ::pco/batch? true}
-  (let [ids (map :language/id items)]
-    (->> ids
-         (mapv #(some (fn [{:keys [:language/id]}] (when (= id %) %)) mock-languages-db)))))
 
 (def mock-resource-db
   [{:language/id 1, :language/code :language/en, :lang-resource/rid 1, :lang-resource/rid-code "en-1", :lang-resource/value "en:1"}
@@ -154,8 +134,6 @@
 (def resolvers
   [parent-title-resource
    child-title-resource
-   languages
-   languages-by-ids
    (if true resource-value-batched resource-value-one)
    resource-values
    parents
