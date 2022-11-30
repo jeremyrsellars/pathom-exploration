@@ -1,5 +1,5 @@
 (ns pathom-bug.ex1
-  "Resolvers to fetch course catalog information from the database."
+  "Resolvers to fetch child catalog information from the database."
   (:require clojure.pprint
             [clojure.string :as string]
             [com.wsscode.misc.coll :as coll]
@@ -13,14 +13,14 @@
   [:language/id
    :language/code])
 
-(def data-languages
+(def mock-languages-db
   [{:language/id 1, :language/code "en"}
    {:language/id 2, :language/code "es"}])
 
 (def mock-resource-db
   (into []
         (for [rid (range 100)
-              {:keys [language/id language/code] :as l} data-languages]
+              {:keys [language/id language/code] :as l} mock-languages-db]
           (assoc l
                  :language/id id
                  :language/code (keyword "language" (name code))
@@ -28,24 +28,24 @@
                  :lang-resource/rid-code (str (name code) "-" rid)
                  :lang-resource/value (str (name code) ":" rid)))))
 
-(def data-categories
-  [{:course-category/id 1, :course-category/title-rid 1}])
+(def mock-parents-db
+  [{:parent/id 1, :parent/title-rid 1}])
 
 (pco/defresolver languages
   "Fetches all languages"
   [_ _]
   {::pco/output [{:languages language-attributes}]}
-  {:languages data-languages})
+  {:languages mock-languages-db})
 
 (pco/defresolver languages-by-ids
-  "Fetches specific course languages by course-category/id"
+  "Fetches specific child languages by parent/id"
   [_env items]
   {::pco/input  [:language/id]
    ::pco/output language-attributes
    ::pco/batch? true}
   (let [ids (map :language/id items)]
     (->> ids
-         (mapv #(some (fn [{:keys [:language/id]}] (when (= id %) %)) data-languages)))))
+         (mapv #(some (fn [{:keys [:language/id]}] (when (= id %) %)) mock-languages-db)))))
 
 (defn resource-seed-resolver
   "Creates a resolver for the specified resource id attribute
@@ -84,7 +84,7 @@
   (let [lang-codes (or (some->> env pco/params :language/codes)
                        (map (fn [{:keys [language/code]}]
                               (keyword "language" (name code)))
-                            data-languages))]
+                            mock-languages-db))]
     {:lang-resource/resources
      (mapv #(hash-map :lang-resource/rid-code (str (name %) "-" rid), :language/code %)
            lang-codes)}))
@@ -117,60 +117,60 @@
             {:lang-resource/value (get indexed rid-code)})
           [resource])))
 
-;; Categories
+;; parents
 
-(def category-attributes
-  [:course-category/id
-   :course-category/title-rid])
+(def parent-attributes
+  [:parent/id
+   :parent/title-rid])
 
-(pco/defresolver categories
-  "Fetches all course categories"
+(pco/defresolver parents
+  "Fetches all child parents"
   [_env _]
-  {::pco/output [{:course-categories category-attributes}]}
-  {:course-categories (vec data-categories)})
+  {::pco/output [{:child-parents parent-attributes}]}
+  {:child-parents (vec mock-parents-db)})
 
-(pco/defresolver categories-by-ids
-  "Fetches specific course categories by course-category/id"
+(pco/defresolver parents-by-ids
+  "Fetches specific child parents by parent/id"
   [_env items]
-  {::pco/input  [:course-category/id]
-   ::pco/output [{:course-category category-attributes}]
+  {::pco/input  [:parent/id]
+   ::pco/output [{:parent parent-attributes}]
    ::pco/batch? true}
-  (->> (map :course-category/id items)
-       data-categories
-       (coll/restore-order items :course-category/id)
-       (hash-map :course-category)))
+  (->> (map :parent/id items)
+       mock-parents-db
+       (coll/restore-order items :parent/id)
+       (hash-map :parent)))
 
-;; Courses
+;; children
 
-(def course-attributes
-  [:course/id
-   :course/key
-   :course-category/id
-   :course/title-rid])
+(def child-attributes
+  [:child/id
+   :child/key
+   :parent/id
+   :child/title-rid])
 
-(pco/defresolver courses-in-categories
-  "Fetches courses in course categories specified by course-category/id"
-  [_env categories]
-  {::pco/input  [:course-category/id]
-   ::pco/output [{:course-category/courses course-attributes}]
+(pco/defresolver children-in-parents
+  "Fetches children in child parents specified by parent/id"
+  [_env parents]
+  {::pco/input  [:parent/id]
+   ::pco/output [{:parent/children child-attributes}]
    ::pco/batch? true}
-  (let [category-ids (map :course-category/id categories)]
-    (mapv (fn [id] {:course-category/courses
-                    [{:course/id (+ 100 id)
-                      :course/key (keyword (str "course-" (+ 100 id)))
-                      :course-category/id id
-                      :course/title-rid 1}
-                     {:course/id (+ 101 id)
-                      :course/key (keyword (str "course-" (+ 101 id)))
-                      :course-category/id id
-                      :course/title-rid 3}]})
-          category-ids)))
+  (let [parent-ids (map :parent/id parents)]
+    (mapv (fn [id] {:parent/children
+                    [{:child/id (+ 100 id)
+                      :child/key (keyword (str "child-" (+ 100 id)))
+                      :parent/id id
+                      :child/title-rid 1}
+                     {:child/id (+ 101 id)
+                      :child/key (keyword (str "child-" (+ 101 id)))
+                      :parent/id id
+                      :child/title-rid 3}]})
+          parent-ids)))
 
 
 (def rid-kws
   (->> (concat language-attributes
-               category-attributes
-               course-attributes)
+               parent-attributes
+               child-attributes)
        (into []
              (filter #(string/ends-with? (.-sym %) "-rid")))))
 
@@ -180,9 +180,9 @@
             languages-by-ids
             (if true resource-value-batched resource-value-one)
             resource-values
-            categories
-            categories-by-ids
-            courses-in-categories
+            parents
+            parents-by-ids
+            children-in-parents
             #_|)))
 
 (def env
@@ -190,299 +190,19 @@
     :connect-parser
     (p.connector/connect-env {::pvc/parser-id `env})))
 
-
-;; (p.eql/process
-;;   env
-;;   {:list [{:lang-resource/rid 3}
-;;           {:lang-resource/rid 4}]}
-;;   [{:list [:language/en :language/es]}])
-
-;; (p.eql/process
-;;   env
-;;   {:list [{:lang-resource/rid 3 :language/code "en"}
-;;           {:lang-resource/rid 3 :language/code "es"}
-;;           {:lang-resource/rid 4 :language/code "en"}]}
-;;   [{:list [:lang-resource/rid :language/code :lang-resource/value]}])
-
-(let [resource-fragment [;:lang-resource/rid-code ;:lang-resource/resources
-                         `({:lang-resource/resources [:language/code :lang-resource/value #_:lang-resource/rid #_:lang-resource/rid-code]}
-                           {:language/codes [:language/en :language/es]})]]
-  (as->
-   (p.eql/process
-    env
-  ;;  {:list [#_{:course-category/id 2}{:course-category/id 1}#_{:course-category/id 3}]}
-    [{:course-categories
-      [;:course-category/id
-       ;{:course-category/title-resource resource-fragment}
-       ;:course-category/title-rid;{:course-category/title [:lang-resource/resources #_[:lang-resource/rid :language/code :lang-resource/value]]}
-       :course-category/id
-      ;;  :course-category/key
-      ;;  :course-category/beta? ;isBeta
-      ;;  :course-category/new? ;isNew
-       {:course-category/title-resource resource-fragment}
-      ;;  {:course-category/short-description-resource resource-fragment} ;shortDescription
-      ;;  {:course-category/long-description-resource resource-fragment}  ;longDescription
-      ;;  :course-category/title-screen-src
-      ;;  :course-category/thumb-src
-      ;;  {:course-category/overlay-resource resource-fragment}
-       {:course-category/courses [:course/id
-                                  :course/key
-                                  ;; :course-category/id
-                                  ;; :course/order
-                                  ;; :course/beta? ;isBeta
-                                  ;; :course/new? ;isNew
-                                  ;; :course/image
-                                  ;; :course/title-rid
-                                  ;; {:course/title-resource resource-fragment}:course/title-rid
-                                  ;; :course/title-resource
-                                  ;; {:course/title-resource [:lang-resource/resources]}
-                                  {:course/title-resource resource-fragment}
-                                ;;  {:lang-resource/resources [:language/code :lang-resource/value :lang-resource/rid]}
-
-                                  ;; {:course/short-description-resource resource-fragment}:course/short-description-rid]}]}]))
-                                  ;#_{:course/long-description-resource resource-fragment}:course/long-description-rid
-                                  ;#_{:course/overlay-resource resource-fragment}:course/overlay-rid
-                                  ; insert activities
-                                  ;#_{:course/play-time-resource resource-fragment}]}:course/play-time-rid
-                                  #_|]}]}])
-      ;;  {:course-category/attachment-sections [;:category-attachment-section/id
-      ;;                                         ;:category-attachment-section/order
-      ;;                                         {:category-attachment-section/title-resource resource-fragment}
-      ;;                                         {:category-attachment-section/attachments [;:category-attachment/id
-      ;;                                                                                    {:category-attachment/title-resource resource-fragment}
-      ;;                                                                                    {:category-attachment/description-resource resource-fragment}
-      ;;                                                                                    {:category-attachment/link-resource resource-fragment}]}]}
-      ;;                                                                                    ;:category-attachment/cover-image-src]}]}
-      ;;                                                                                    ;:category-attachment/order]]}
-      ;;  {:course-category/resources [:category-resource/key ; library
-      ;;                               :category-resource/type
-      ;;                               :language/code
-      ;;                               :category-resource/cover-image-src
-      ;;                               :category-resource/order
-      ;;                               {:category-resource/title-resource resource-fragment}
-      ;;                               {:category-resource/description-resource resource-fragment}]}]}]))
-   result
-    {:result result
-     :meta (meta result)}))
-
-;; (p.eql/process
-;;   env
-;;   {:list [#_{:course-category/id 2}{:course-category/id 1}#_{:course-category/id 3}]}
-;;   [{:list [:course-category/id
-;;            :course-category/title-rid;{:course-category/title [:lang-resource/resources #_[:lang-resource/rid :language/code :lang-resource/value]]}
-;;            {:course-category/courses
-;;             [:course/id
-;;              {:course-category/attachment-sections [:category-attachment-section/id]}]}]}])
-
-;; (p.eql/process
-;;   env
-;;   {:list [{:lang-resource/rid 3 :language/code "en" :lang-resource/value "hello"}
-;;           {:lang-resource/rid 3 :language/code "es" :lang-resource/value "hola"}
-;;           {:lang-resource/rid 4 :language/code "en" :lang-resource/value "hi"}]}
-;;   [{:list [:language/en :language/es]}])
-
-;; (p.eql/process
-;;   env
-;;   [:course-catalog/resources
-;;    :course-catalog/attachments])
-#_(p.eql/process
-   env
-   {:list [{:course/id 4} {:course/id 1}]}
-   [{:list [:course-category/id
-            :course/id
-            :course/new?
-            {:course/activities [:course-activity/id
-                                 :course-activity/image]}
-            {:course/resources [:category-resource/key
-                                :category-resource/cover-image-src]}
-            :course-category/attachment-sections]}])
-
-#_(p.eql/process
-   env
-   {:list [#_{:course-category/id 2} {:course-category/id 1} #_{:course-category/id 3}]}
-   [{:list [:course-category/id
-            {:course-category/courses
-             [:course/id
-              {:course-category/attachment-sections [:category-attachment-section/id]}]}]}])
-#_(p.eql/process
-   env
-   {:list [#_{:course-category/id 2} {:course-category/id 1} #_{:course-category/id 3}]}
-   [{:list [:course-category/id ;:course-category/order
-            {:course-category/courses
-             [:course/id
-              :course/new?
-              {:course/activities [:course-activity/id
-                                   :course-activity/image]}
-              {:course/resources [:category-resource/key
-                                  :category-resource/cover-image-src
-                                  :category-resource/type
-                                  :category-resource/order
-                                  :category-resource/title-rid
-                                  :category-resource/description-rid]}
-             ;:course-category/attachment-sections #_
-              {:course-category/attachment-sections [:category-attachment-section/id
-                                                     :category-attachment-section/order
-                                                     :category-attachment-section/title-rid
-                                                     :category-attachment-section/attachments]}]}]}])
-                                           ;                                         [:category-attachment/id]]}]}]}])
-                                                                                    ;; :attachment/key
-                                                                                    ;; :attachment/order
-                                                                                    ;; :attachment/title-rid
-                                                                                    ;; :attachment/link-rid
-                                                                                    ;; :attachment/cover-image-src]}]}]}]}])
-#_(p.eql/process
-   env
-   {:list [#_{:course-category/id 2} {:course-category/id 1} #_{:course-category/id 3}]}
-   [{:course-categories
-     [:course-category/id
-      :course-category/order
-      {:course-category/title [:language/en :language/es :lang-resource/rid]}]}])
-    ;; :language/en]}])
-#_(comment
-    #_[:course-category/id ;:course-category/order #_
-  ;; :course-category/courses
-       #_{:course-category/courses
-          [:course/id
-           :course/new?
-           {:course/activities [:course-activity/id
-                                :course-activity/image]}
-           {:course/resources [:category-resource/key
-                               :category-resource/cover-image-src
-                               :category-resource/type
-                               :category-resource/order
-                               :category-resource/title-rid
-                               :category-resource/description-rid]}
-             ;:course-category/attachment-sections #_
-           {:course-category/attachment-sections [:category-attachment-section/id
-                                                  :category-attachment-section/order
-                                                  :category-attachment-section/title-rid
-                                                  :category-attachment-section/attachments]}]}])
-                                           ;                                         [:category-attachment/id]]}]}]}])
-                                                                                    ;; :attachment/key
-                                                                                    ;; :attachment/order
-                                                                                    ;; :attachment/title-rid
-                                                                                    ;; :attachment/link-rid
-                                                                                    ;; :attachment/cover-image-src]}]}]}]}])
-
-#_(comment
-    (store/get-courses-in-categories sql/sql [2 1])
-    ((:resolve courses-in-categories) {:db/sql sql/sql} [{:course-category/id 2} {:course-category/id 1}])
-    |
-
-    (require '[com.wsscode.pathom3.connect.indexes :as pci] '[com.wsscode.pathom3.interface.eql :as p.eql])
-  ;; (def env
-  ;;   (pci/register
-  ;;       categories))
-  ;;       ;; categories-by-ids
-  ;;       ;; courses
-  ;;       ;; courses-by-ids
-  ;;       ;; courses-in-categories]))
-  ;; (def pathom (p.eql/boundary-interface (assoc (pci/register resolvers):db/sql sql/sql)))
-  ;(p.eql/process
-    (def env {:db/sql sql/sql})
-    ((p.eql/boundary-interface (pci/register categories))
-     {:db/sql sql/sql}
-     [:course-categories])
-    ((p.eql/boundary-interface (pci/register course-activities))
-     {:db/sql sql/sql}
-     [:course/activities])
-    (;(p.eql/boundary-interface)
-   ; (pci/register resolvers);(p.eql/boundary-interface (pci/register resolvers))
-     pathom
-  ;;  {:db/sql        sql/sql
-  ;;   :pathom/entity [{:course-category/id 2}]}
-     {:course-category/id 2}
-     [:course-categories])
-
-
-    (require '[com.wsscode.pathom3.connect.indexes :as pci] '[com.wsscode.pathom3.interface.eql :as p.eql] #_'[banzai.pathom.interface :as p])
-    (def env (merge {:db/sql sql/sql} (pci/register resolvers)))
-
-
-    (p.eql/process
-     env
-     {:list [{:course-category/id 2} {:course-category/id 1}]}
-     [{:list [:course-category/courses :course-category/id]}])
-
-    (p.eql/process
-     env
-    ;; {:list [{:course-category/id 2}{:course-category/id 1}]}
-     [{:course/activities [:course/id :course-activity/id]}])
-
-    (p.eql/process
-     env
-     {:list [{:course-activity/id 2} {:course-activity/id 1}]}
-     [{:course/activities [:course/id :course-activity/id]}])
-
-
-  ;; Activity
-    (p.eql/process
-     env
-     [:course-catalog/activities])
-
-    (p.eql/process
-     env
-     {:list [{:course/id 4} {:course/id 1}]}
-     [{:list [:course-category/id
-              :course/id
-              :course/new?
-              {:course/activities [:course-activity/id
-                                   :course-activity/image]}]}])
-
-    (p.eql/process
-     env
-     {:list [{:course-category/id 2} {:course-category/id 1} {:course-category/id 3}]}
-     [{:list [:course-category/id
-              {:course-category/courses
-               [:course/id
-                :course/new?
-                {:course/activities [:course-activity/id
-                                     :course-activity/image]}]}]}])
-
-  ;; Activity
-    (p.eql/process
-     env
-     [:course/activities])
-
-    (p.eql/process
-     env
-     {:list [{:course/id 2} {:course/id 1}]}
-     [{:list [:course/activities :course-category/id]}])
-
-   ;; Activity
-    (p.eql/process
-     env
-     [{:list [:course-category/courses :course-category/id]}])
-
-    (p.eql/process
-     env
-     {:list [{:course/id 2} {:course/id 1}]}
-     [{:list [:course-category/courses :course-category/id]}])
-
-    (p.eql/process
-     env
-     {:list [{:course/id 2} {:course/id 1}]}
-     [{:list [:course-category/courses :course-category/id]}])
-    |)
-;; (get-courses* sql
-  ;;                      {:columns courses-columns
-  ;;                       ;:course/ids [1]
-  ;;                       :course-category/ids [2]}))
-;(store/get-courses-in-categories sql/sql [1 2])
-
 (def query
-  [{:course-categories
-    [:course-category/id
-     {:course-category/title-resource [:lang-resource/rid {:lang-resource/resources [:language/code :lang-resource/value]}]}
-     {:course-category/courses
-      [:course/id
-       :course/key
-       :course/title-rid
-       {:course/title-resource [:lang-resource/rid {:lang-resource/resources [:language/code :lang-resource/value]}]}
+  [{:child-parents
+    [:parent/id
+     {:parent/title-resource [:lang-resource/rid {:lang-resource/resources [:language/code :lang-resource/value]}]}
+     {:parent/children
+      [:child/id
+       :child/key
+       :child/title-rid
+       {:child/title-resource [:lang-resource/rid {:lang-resource/resources [:language/code :lang-resource/value]}]}
        #_|]}]}])
 
-(defn run-example
-  []
+(defn doc-example
+  [edn-query]
   (println "query")
   (println "---------------")
   (println)
@@ -492,14 +212,9 @@
   (println "result")
   (println "---------------")
   (println "```edn")
-  (clojure.pprint/pprint (p.eql/process env query))
+  (clojure.pprint/pprint (p.eql/process env edn-query))
   (println "```"))
 
 (defn run [_opts]
-  (run-example)
+  (doc-example query)
   (System/exit 0))
-
-
-(defn -main []
-  (run-example))
-(-main)
