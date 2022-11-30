@@ -1,5 +1,6 @@
 (ns pathom-bug.ex1
-  "Resolvers to fetch child catalog information from the database."
+  "Resolvers to fetch language-specific titles for a 2-level hierarchy
+   where the titles at both levels are fetched in a single batch."
   (:require clojure.pprint
             [com.wsscode.misc.coll :as coll]
             [com.wsscode.pathom3.connect.operation :as pco]
