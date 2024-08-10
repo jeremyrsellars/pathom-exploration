@@ -1,3 +1,4 @@
 {:paths ["src"]
- :deps {com.wsscode/pathom3              {:mvn/version "2022.10.19-alpha"}
-        com.wsscode/pathom-viz-connector {:mvn/version "2022.02.14"}}}
+ :deps {com.wsscode/pathom3              {:mvn/version "2023.08.22-alpha"}
+        com.wsscode/pathom-viz-connector {:mvn/version "2022.02.14"}
+        hashp/hashp                      {:mvn/version "0.2.2"}}}
